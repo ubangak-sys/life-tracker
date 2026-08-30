@@ -1,6 +1,5 @@
 // ============================================================
 // Настройки Supabase (публичные значения — безопасно хранить здесь).
-// Заполните их значениями вашего проекта (см. SUPABASE_SETUP.md).
 // ============================================================
-window.SUPABASE_URL = "https://XXXXXXXX.supabase.co";
-window.SUPABASE_ANON_KEY = "ВАШ_ANON_KEY";
+window.SUPABASE_URL = "https://xuktpenlpvxbxwcndbut.supabase.co";
+window.SUPABASE_ANON_KEY = "sb_publishable_1gDTxbWkC-nOM92Q5P7afg_DPdr-v3C";
