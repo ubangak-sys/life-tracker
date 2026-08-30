@@ -84,6 +84,31 @@ function loadCache() {
   records = loadJSON(LS_RECORDS, {});
 }
 
+// Дубли: одинаковые название + категория. Возвращает уникальный список,
+// список id дублей и карту "id дубля -> id оставленного действия".
+function dedupeActions(list) {
+  const remap = new Map();
+  const unique = [];
+  const dupIds = [];
+  const sorted = [...list].sort((a, b) =>
+    (a.pos ?? 0) - (b.pos ?? 0) ||
+    String(a.created_at || "").localeCompare(String(b.created_at || "")) ||
+    String(a.id).localeCompare(String(b.id))
+  );
+  const seen = new Map();
+  for (const a of sorted) {
+    const key = String(a.title || "").trim().toLowerCase() + "|" + (a.category || "");
+    if (seen.has(key)) {
+      dupIds.push(a.id);
+      remap.set(a.id, seen.get(key));
+    } else {
+      seen.set(key, a.id);
+      unique.push(a);
+    }
+  }
+  return { unique, dupIds, remap };
+}
+
 function dateKey(d = new Date()) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -227,6 +252,7 @@ async function signOut() {
 /* ---------- Загрузка данных из Supabase ---------- */
 async function loadData() {
   showLoading(true);
+  let dedupeRemap = new Map();
   try {
     const [aRes, rRes] = await Promise.all([
       sb.from("actions").select("*").order("pos", { ascending: true }).order("created_at", { ascending: true }),
@@ -241,12 +267,26 @@ async function loadData() {
       const ins = await sb.from("actions").insert(seeded).select();
       if (ins.error) throw ins.error;
       actions = ins.data;
+      dedupeRemap = new Map();
     } else {
-      actions = aRes.data;
+      const d = dedupeActions(aRes.data);
+      actions = d.unique;
+      dedupeRemap = d.remap;
+      if (d.dupIds.length > 0) {
+        // чистим дубли прямо в базе (best-effort)
+        sb.from("actions").delete().in("id", d.dupIds)
+          .then(() => console.log("Удалены дубли действий:", d.dupIds.length))
+          .catch((e) => console.warn("Не удалось удалить дубли:", e && e.message));
+      }
     }
 
     records = {};
-    rRes.data.forEach((r) => { records[r.date] = Array.isArray(r.done) ? r.done : []; });
+    rRes.data.forEach((r) => {
+      const done = (Array.isArray(r.done) ? r.done : [])
+        .map((id) => dedupeRemap.get(id) || id)
+        .filter((id, i, arr) => arr.indexOf(id) === i);
+      records[r.date] = done;
+    });
 
     saveCache();
   } catch (err) {
