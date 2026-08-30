@@ -7,141 +7,172 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <span class="brand-icon">⚖️</span>
-      <div>
-        <h1>Жизнь в балансе</h1>
-        <p class="subtitle">ежедневный чек-лист здорового и продуктивного дня</p>
-      </div>
-    </div>
-    <div class="topbar-actions">
-      <div class="streak-badge" title="Серия дней подряд">
-        <span>🔥</span><span id="streakBadge">0</span>
-      </div>
-      <button id="themeToggle" class="icon-btn" title="Переключить тему">🌙</button>
-    </div>
-  </header>
-
-  <main>
-    <!-- Сегодня -->
-    <section class="grid-top">
-      <div class="card today-card">
-        <div class="today-head">
-          <div>
-            <h2>Сегодня</h2>
-            <p class="today-date" id="todayDate"></p>
-          </div>
-          <div class="grade" id="gradeBadge">—</div>
-        </div>
-        <div class="today-body">
-          <div class="ring-wrap">
-            <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
-              <circle class="ring-bg" cx="60" cy="60" r="52"></circle>
-              <circle class="ring-fg" id="ringFg" cx="60" cy="60" r="52"></circle>
-            </svg>
-            <div class="ring-center">
-              <span class="ring-pct" id="ringPct">0%</span>
-              <span class="ring-label">выполнено</span>
-            </div>
-          </div>
-          <div class="today-points">
-            <div class="points-line">
-              <span class="points-value" id="todayPoints">0</span>
-              <span class="points-total">/ <span id="todayMax">0</span> баллов</span>
-            </div>
-            <div class="done-line" id="doneLine">0 из 0 действий</div>
-            <button id="resetToday" class="link-btn">Сбросить день</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="stats-grid" id="statsGrid"></div>
-    </section>
-
-    <!-- Чек-лист -->
-    <section class="card">
-      <div class="section-head">
-        <h2>Чек-лист на сегодня</h2>
-        <span class="hint">отмечайте выполненные действия — баллы суммируются автоматически</span>
-      </div>
-      <div id="checklist" class="checklist"></div>
-    </section>
-
-    <!-- Прогресс -->
-    <section class="card">
-      <div class="section-head">
-        <h2>Трекер прогресса</h2>
-        <div class="range-toggle" id="rangeToggle">
-          <button data-range="7">7 дней</button>
-          <button data-range="14" class="active">14 дней</button>
-          <button data-range="30">30 дней</button>
-        </div>
-      </div>
-      <div class="chart-wrap">
-        <div id="chart" class="chart"></div>
-        <div class="chart-axis" id="chartAxis"></div>
-      </div>
-    </section>
-
-    <!-- Управление действиями -->
-    <section class="card">
-      <div class="section-head">
-        <h2>Мои действия</h2>
-        <div class="manage-buttons">
-          <button id="addAction" class="btn btn-primary">＋ Добавить действие</button>
-          <button id="restoreDefaults" class="btn">Восстановить по умолчанию</button>
-        </div>
-      </div>
-      <p class="hint">Вес — сколько баллов приносит действие. Можно добавлять, редактировать и удалять свои привычки.</p>
-      <div id="actionsList" class="actions-list"></div>
-    </section>
-
-    <section class="card danger-zone">
-      <div class="section-head">
-        <h2>Данные</h2>
-      </div>
-      <p class="hint">Всё хранится локально в вашем браузере. Экспорт/импорт поможет перенести данные или сделать резервную копию.</p>
-      <div class="manage-buttons">
-        <button id="exportData" class="btn">Экспорт JSON</button>
-        <button id="importData" class="btn">Импорт JSON</button>
-        <input type="file" id="importFile" accept="application/json" hidden />
-        <button id="wipeData" class="btn btn-danger">Стереть все данные</button>
-      </div>
-    </section>
-  </main>
-
-  <!-- Модальное окно действия -->
-  <div class="modal-backdrop" id="modalBackdrop" hidden>
-    <div class="modal" role="dialog" aria-modal="true">
-      <h3 id="modalTitle">Добавить действие</h3>
-      <form id="actionForm">
-        <label class="field">
-          <span>Название</span>
-          <input type="text" id="fTitle" required maxlength="80" placeholder="Например: Зарядка 15 минут" />
-        </label>
-        <div class="field-row">
-          <label class="field">
-            <span>Вес (баллы)</span>
-            <input type="number" id="fWeight" required min="1" max="100" step="1" value="10" />
-          </label>
-          <label class="field">
-            <span>Категория</span>
-            <select id="fCategory"></select>
-          </label>
-        </div>
-        <label class="field">
-          <span>Иконка (эмодзи)</span>
-          <input type="text" id="fIcon" maxlength="4" placeholder="✅" />
-        </label>
-        <div class="modal-actions">
-          <button type="button" class="btn" id="modalCancel">Отмена</button>
-          <button type="submit" class="btn btn-primary" id="modalSave">Сохранить</button>
-        </div>
+  <!-- Экран входа -->
+  <section id="authScreen" class="auth-screen" hidden>
+    <div class="auth-card">
+      <div class="auth-brand">⚖️</div>
+      <h1>Жизнь в балансе</h1>
+      <p class="hint">
+        Ежедневный чек-лист здорового и продуктивного дня.<br />
+        Войдите, чтобы прогресс синхронизировался между устройствами.
+      </p>
+      <form id="authForm" class="auth-form">
+        <input type="email" id="authEmail" placeholder="ваш@email.com" required autocomplete="email" />
+        <button type="submit" class="btn btn-primary btn-block" id="authSubmit">Получить ссылку для входа</button>
       </form>
+      <p id="authMessage" class="auth-message" hidden></p>
+      <p class="auth-note">
+        Ссылка придёт на почту. Откройте её на этом же устройстве — вы войдёте автоматически.
+      </p>
+    </div>
+  </section>
+
+  <!-- Приложение -->
+  <div id="app" hidden>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-icon">⚖️</span>
+        <div>
+          <h1>Жизнь в балансе</h1>
+          <p class="subtitle">ежедневный чек-лист здорового и продуктивного дня</p>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <div class="streak-badge" title="Серия дней подряд">
+          <span>🔥</span><span id="streakBadge">0</span>
+        </div>
+        <button id="signOut" class="icon-btn" title="Выйти">⎋</button>
+        <button id="themeToggle" class="icon-btn" title="Переключить тему">🌙</button>
+      </div>
+    </header>
+
+    <main>
+      <!-- Сегодня -->
+      <section class="grid-top">
+        <div class="card today-card">
+          <div class="today-head">
+            <div>
+              <h2>Сегодня</h2>
+              <p class="today-date" id="todayDate"></p>
+            </div>
+            <div class="grade" id="gradeBadge">—</div>
+          </div>
+          <div class="today-body">
+            <div class="ring-wrap">
+              <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
+                <circle class="ring-bg" cx="60" cy="60" r="52"></circle>
+                <circle class="ring-fg" id="ringFg" cx="60" cy="60" r="52"></circle>
+              </svg>
+              <div class="ring-center">
+                <span class="ring-pct" id="ringPct">0%</span>
+                <span class="ring-label">выполнено</span>
+              </div>
+            </div>
+            <div class="today-points">
+              <div class="points-line">
+                <span class="points-value" id="todayPoints">0</span>
+                <span class="points-total">/ <span id="todayMax">0</span> баллов</span>
+              </div>
+              <div class="done-line" id="doneLine">0 из 0 действий</div>
+              <button id="resetToday" class="link-btn">Сбросить день</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="stats-grid" id="statsGrid"></div>
+      </section>
+
+      <!-- Чек-лист -->
+      <section class="card">
+        <div class="section-head">
+          <h2>Чек-лист на сегодня</h2>
+          <span class="hint">отмечайте выполненные действия — баллы суммируются автоматически</span>
+        </div>
+        <div id="checklist" class="checklist"></div>
+      </section>
+
+      <!-- Прогресс -->
+      <section class="card">
+        <div class="section-head">
+          <h2>Трекер прогресса</h2>
+          <div class="range-toggle" id="rangeToggle">
+            <button data-range="7">7 дней</button>
+            <button data-range="14" class="active">14 дней</button>
+            <button data-range="30">30 дней</button>
+          </div>
+        </div>
+        <div class="chart-wrap">
+          <div id="chart" class="chart"></div>
+          <div class="chart-axis" id="chartAxis"></div>
+        </div>
+      </section>
+
+      <!-- Управление действиями -->
+      <section class="card">
+        <div class="section-head">
+          <h2>Мои действия</h2>
+          <div class="manage-buttons">
+            <button id="addAction" class="btn btn-primary">＋ Добавить действие</button>
+            <button id="restoreDefaults" class="btn">Восстановить по умолчанию</button>
+          </div>
+        </div>
+        <p class="hint">Вес — сколько баллов приносит действие. Можно добавлять, редактировать и удалять свои привычки.</p>
+        <div id="actionsList" class="actions-list"></div>
+      </section>
+
+      <section class="card danger-zone">
+        <div class="section-head">
+          <h2>Данные</h2>
+        </div>
+        <p class="hint">Действия и отметки хранятся в облаке (Supabase) и синхронизируются между устройствами. Локально в браузере остаётся только резервный кеш на случай отсутствия сети.</p>
+        <div class="manage-buttons">
+          <button id="exportData" class="btn">Экспорт JSON</button>
+          <button id="importData" class="btn">Импорт JSON</button>
+          <input type="file" id="importFile" accept="application/json" hidden />
+          <button id="wipeData" class="btn btn-danger">Стереть все данные</button>
+        </div>
+      </section>
+    </main>
+
+    <!-- Модальное окно действия -->
+    <div class="modal-backdrop" id="modalBackdrop" hidden>
+      <div class="modal" role="dialog" aria-modal="true">
+        <h3 id="modalTitle">Добавить действие</h3>
+        <form id="actionForm">
+          <label class="field">
+            <span>Название</span>
+            <input type="text" id="fTitle" required maxlength="80" placeholder="Например: Зарядка 15 минут" />
+          </label>
+          <div class="field-row">
+            <label class="field">
+              <span>Вес (баллы)</span>
+              <input type="number" id="fWeight" required min="1" max="100" step="1" value="10" />
+            </label>
+            <label class="field">
+              <span>Категория</span>
+              <select id="fCategory"></select>
+            </label>
+          </div>
+          <label class="field">
+            <span>Иконка (эмодзи)</span>
+            <input type="text" id="fIcon" maxlength="4" placeholder="✅" />
+          </label>
+          <div class="modal-actions">
+            <button type="button" class="btn" id="modalCancel">Отмена</button>
+            <button type="submit" class="btn btn-primary" id="modalSave">Сохранить</button>
+          </div>
+        </form>
+      </div>
     </div>
   </div>
 
+  <!-- Индикатор загрузки -->
+  <div id="loading" class="loading" hidden>
+    <div class="spinner"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1"></script>
+  <script src="config.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

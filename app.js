@@ -1,12 +1,16 @@
 "use strict";
 
 /* ============================================================
-   Жизнь в балансе — локальный трекер привычек
-   Данные хранятся в localStorage браузера.
+   Жизнь в балансе — трекер привычек с облачной синхронизацией.
+   Хранилище: Supabase (Postgres). Ключи берутся из config.js.
+   Локальный localStorage — только резервный кеш на случай офлайна.
    ============================================================ */
 
-const LS_ACTIONS = "lifechecker_actions_v1";
-const LS_RECORDS = "lifechecker_records_v1";
+const SUPABASE_URL = window.SUPABASE_URL;
+const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY;
+
+const LS_ACTIONS = "lifechecker_actions_v2";
+const LS_RECORDS = "lifechecker_records_v2";
 const LS_THEME = "lifechecker_theme";
 
 /* ---------- Категории ---------- */
@@ -21,55 +25,63 @@ const CATEGORIES = [
 
 const catMeta = (id) => CATEGORIES.find((c) => c.id === id) || CATEGORIES[0];
 
-/* ---------- Действия по умолчанию ---------- */
+/* ---------- Действия по умолчанию (id назначает база) ---------- */
 function defaultActions() {
   return [
-    { id: "s1", title: "Сон 7–9 часов",                    weight: 20, category: "sleep",        icon: "🌙" },
-    { id: "s2", title: "Лёг спать до 23:30",               weight: 15, category: "sleep",        icon: "🛏️" },
-    { id: "s3", title: "Подъём бодрым, без «досыпания»",   weight: 10, category: "sleep",        icon: "🌅" },
-    { id: "n1", title: "Стакан воды после пробуждения",    weight: 5,  category: "nutrition",    icon: "💧" },
-    { id: "n2", title: "Водный баланс 2 л за день",        weight: 10, category: "nutrition",    icon: "🚰" },
-    { id: "n3", title: "Полноценный завтрак",              weight: 10, category: "nutrition",    icon: "🍳" },
-    { id: "n4", title: "Овощи и фрукты (5 порций)",        weight: 10, category: "nutrition",    icon: "🥦" },
-    { id: "n5", title: "Без сахара и фастфуда",            weight: 15, category: "nutrition",    icon: "🚫" },
-    { id: "a1", title: "Зарядка / разминка",               weight: 10, category: "activity",     icon: "🤸" },
-    { id: "a2", title: "Тренировка 30+ минут",             weight: 25, category: "activity",     icon: "🏋️" },
-    { id: "a3", title: "Прогулка на свежем воздухе",       weight: 15, category: "activity",     icon: "🚶" },
-    { id: "m1", title: "Медитация / дыхание 10 минут",     weight: 15, category: "mind",         icon: "🧘" },
-    { id: "m2", title: "Чтение 30 минут",                  weight: 15, category: "mind",         icon: "📚" },
-    { id: "m3", title: "Планирование дня",                 weight: 15, category: "mind",         icon: "📝" },
-    { id: "m4", title: "Рефлексия / дневник",              weight: 10, category: "mind",         icon: "✍️" },
-    { id: "p1", title: "Глубокая работа без отвлечений",   weight: 25, category: "productivity", icon: "🎯" },
-    { id: "p2", title: "Выполнены 3 главные задачи",       weight: 20, category: "productivity", icon: "✅" },
-    { id: "p3", title: "Цифровой детокс (соцсети < 1 ч)",  weight: 15, category: "productivity", icon: "📵" },
-    { id: "r1", title: "Время с близкими",                 weight: 15, category: "rest",         icon: "👨‍👩‍👧" },
-    { id: "r2", title: "Отдых / любимое хобби",            weight: 15, category: "rest",         icon: "🎨" },
-    { id: "r3", title: "Уборка и порядок",                 weight: 10, category: "rest",         icon: "🧹" },
-    { id: "r4", title: "Растяжка / уход перед сном",       weight: 10, category: "rest",         icon: "🧖" },
+    { title: "Сон 7–9 часов",                    weight: 20, category: "sleep",        icon: "🌙" },
+    { title: "Лёг спать до 23:30",               weight: 15, category: "sleep",        icon: "🛏️" },
+    { title: "Подъём бодрым, без «досыпания»",   weight: 10, category: "sleep",        icon: "🌅" },
+    { title: "Стакан воды после пробуждения",    weight: 5,  category: "nutrition",    icon: "💧" },
+    { title: "Водный баланс 2 л за день",        weight: 10, category: "nutrition",    icon: "🚰" },
+    { title: "Полноценный завтрак",              weight: 10, category: "nutrition",    icon: "🍳" },
+    { title: "Овощи и фрукты (5 порций)",        weight: 10, category: "nutrition",    icon: "🥦" },
+    { title: "Без сахара и фастфуда",            weight: 15, category: "nutrition",    icon: "🚫" },
+    { title: "Зарядка / разминка",               weight: 10, category: "activity",     icon: "🤸" },
+    { title: "Тренировка 30+ минут",             weight: 25, category: "activity",     icon: "🏋️" },
+    { title: "Прогулка на свежем воздухе",       weight: 15, category: "activity",     icon: "🚶" },
+    { title: "Медитация / дыхание 10 минут",     weight: 15, category: "mind",         icon: "🧘" },
+    { title: "Чтение 30 минут",                  weight: 15, category: "mind",         icon: "📚" },
+    { title: "Планирование дня",                 weight: 15, category: "mind",         icon: "📝" },
+    { title: "Рефлексия / дневник",              weight: 10, category: "mind",         icon: "✍️" },
+    { title: "Глубокая работа без отвлечений",   weight: 25, category: "productivity", icon: "🎯" },
+    { title: "Выполнены 3 главные задачи",       weight: 20, category: "productivity", icon: "✅" },
+    { title: "Цифровой детокс (соцсети < 1 ч)",  weight: 15, category: "productivity", icon: "📵" },
+    { title: "Время с близкими",                 weight: 15, category: "rest",         icon: "👨‍👩‍👧" },
+    { title: "Отдых / любимое хобби",            weight: 15, category: "rest",         icon: "🎨" },
+    { title: "Уборка и порядок",                 weight: 10, category: "rest",         icon: "🧹" },
+    { title: "Растяжка / уход перед сном",       weight: 10, category: "rest",         icon: "🧖" },
   ];
 }
 
 /* ---------- Состояние ---------- */
-let actions = loadJSON(LS_ACTIONS, defaultActions());
-let records = loadJSON(LS_RECORDS, {});
+let sb = null;
+let currentSession = null;
 
-let editingId = null;       // id редактируемого действия (или null для нового)
-let chartRange = 14;        // сколько дней показывать на графике
+let actions = [];       // [{ id, title, weight, category, icon, pos }]
+let records = {};       // { "YYYY-MM-DD": [actionId, ...] }
+let chartRange = 14;
+let editingId = null;
 
 /* ---------- Утилиты ---------- */
 function loadJSON(key, fallback) {
   try {
     const raw = localStorage.getItem(key);
-    if (raw == null) return fallback;
-    return JSON.parse(raw);
+    return raw == null ? fallback : JSON.parse(raw);
   } catch (e) {
     return fallback;
   }
 }
 
-function save() {
-  localStorage.setItem(LS_ACTIONS, JSON.stringify(actions));
-  localStorage.setItem(LS_RECORDS, JSON.stringify(records));
+function saveCache() {
+  try {
+    localStorage.setItem(LS_ACTIONS, JSON.stringify(actions));
+    localStorage.setItem(LS_RECORDS, JSON.stringify(records));
+  } catch (e) { /* ignore */ }
+}
+
+function loadCache() {
+  actions = loadJSON(LS_ACTIONS, []);
+  records = loadJSON(LS_RECORDS, {});
 }
 
 function dateKey(d = new Date()) {
@@ -81,17 +93,18 @@ function dateKey(d = new Date()) {
 
 function formatDateRu(d) {
   return d.toLocaleDateString("ru-RU", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
+    weekday: "long", day: "numeric", month: "long", year: "numeric",
   });
 }
 
-function todayRecord() {
-  const k = dateKey();
-  if (!records[k]) records[k] = { done: [] };
-  return records[k];
+function fmtKeyRu(key) {
+  const [y, m, d] = key.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 function maxPoints() {
@@ -99,79 +112,207 @@ function maxPoints() {
 }
 
 function scoreFor(key) {
-  const rec = records[key];
-  if (!rec || !rec.done) return 0;
+  const done = records[key] || [];
   const weights = new Map(actions.map((a) => [a.id, a.weight]));
-  return rec.done.reduce((s, id) => s + (weights.get(id) || 0), 0);
+  return done.reduce((s, id) => s + (weights.get(id) || 0), 0);
 }
 
-function uid() {
-  return "a" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+function computeStreak() {
+  let streak = 0;
+  const d = new Date();
+  if (scoreFor(dateKey(d)) === 0) d.setDate(d.getDate() - 1);
+  let guard = 0;
+  while (guard++ < 5000) {
+    if (scoreFor(dateKey(d)) > 0) {
+      streak++;
+      d.setDate(d.getDate() - 1);
+    } else break;
+  }
+  return streak;
 }
 
-/* ---------- Рендер: шапка / сегодня ---------- */
+/* ---------- UI: показ/скрытие ---------- */
+function showLoading(on) {
+  document.getElementById("loading").hidden = !on;
+}
+function showAuth() {
+  document.getElementById("app").hidden = true;
+  document.getElementById("authScreen").hidden = false;
+}
+function showApp() {
+  document.getElementById("authScreen").hidden = true;
+  document.getElementById("app").hidden = false;
+}
+
+function showAuthMsg(kind, text) {
+  const el = document.getElementById("authMessage");
+  el.hidden = false;
+  el.className = "auth-message " + (kind === "ok" ? "ok" : "err");
+  el.textContent = text;
+}
+
+/* ---------- Тема ---------- */
+function applyTheme() {
+  const saved = localStorage.getItem(LS_THEME) || "light";
+  document.documentElement.setAttribute("data-theme", saved);
+  document.getElementById("themeToggle").textContent = saved === "dark" ? "☀️" : "🌙";
+}
+function toggleTheme() {
+  const cur = document.documentElement.getAttribute("data-theme");
+  const next = cur === "dark" ? "light" : "dark";
+  localStorage.setItem(LS_THEME, next);
+  applyTheme();
+}
+
+/* ---------- Аутентификация (magic link) ---------- */
+async function initAuth() {
+  if (!window.supabase || !window.supabase.createClient || !SUPABASE_URL ||
+      !SUPABASE_ANON_KEY || SUPABASE_URL.includes("XXXX")) {
+    document.getElementById("authScreen").hidden = false;
+    document.getElementById("authForm").hidden = true;
+    showAuthMsg("err", "Приложение не настроено: заполните SUPABASE_URL и SUPABASE_ANON_KEY в файле config.js");
+    return;
+  }
+
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const { data, error } = await sb.auth.getSession();
+  if (error) showAuthMsg("err", "Ошибка входа: " + error.message);
+  currentSession = data.session;
+
+  sb.auth.onAuthStateChange((event, newSession) => {
+    currentSession = newSession;
+    if (newSession) {
+      showApp();
+      loadData();
+    } else {
+      actions = [];
+      records = {};
+      showAuth();
+    }
+  });
+
+  if (currentSession) {
+    showApp();
+    await loadData();
+  } else {
+    showAuth();
+  }
+}
+
+async function onAuthFormSubmit(e) {
+  e.preventDefault();
+  const email = document.getElementById("authEmail").value.trim();
+  const btn = document.getElementById("authSubmit");
+  if (!email || !sb) return;
+
+  btn.disabled = true;
+  btn.textContent = "Отправляю…";
+  const redirectTo = window.location.origin + window.location.pathname;
+  const { error } = await sb.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: redirectTo },
+  });
+  btn.disabled = false;
+  btn.textContent = "Получить ссылку для входа";
+
+  if (error) showAuthMsg("err", "Ошибка: " + error.message);
+  else showAuthMsg("ok", "Ссылка отправлена на " + email + ". Откройте её, чтобы войти.");
+}
+
+async function signOut() {
+  if (sb) await sb.auth.signOut();
+}
+
+/* ---------- Загрузка данных из Supabase ---------- */
+async function loadData() {
+  showLoading(true);
+  try {
+    const [aRes, rRes] = await Promise.all([
+      sb.from("actions").select("*").order("pos", { ascending: true }).order("created_at", { ascending: true }),
+      sb.from("records").select("*"),
+    ]);
+    if (aRes.error) throw aRes.error;
+    if (rRes.error) throw rRes.error;
+
+    if (aRes.data.length === 0) {
+      // первый вход: создаём набор по умолчанию
+      const seeded = defaultActions().map((d, i) => ({ ...d, pos: i, user_id: currentSession.user.id }));
+      const ins = await sb.from("actions").insert(seeded).select();
+      if (ins.error) throw ins.error;
+      actions = ins.data;
+    } else {
+      actions = aRes.data;
+    }
+
+    records = {};
+    rRes.data.forEach((r) => { records[r.date] = Array.isArray(r.done) ? r.done : []; });
+
+    saveCache();
+  } catch (err) {
+    console.warn("Не удалось загрузить из облака, использую локальный кеш:", err && err.message);
+    loadCache();
+  }
+  showLoading(false);
+  renderAll();
+}
+
+/* ---------- Изменение отметки ---------- */
+async function toggleAction(id, checked) {
+  const today = dateKey();
+  let done = Array.isArray(records[today]) ? records[today].slice() : [];
+  if (checked) { if (!done.includes(id)) done.push(id); }
+  else { done = done.filter((x) => x !== id); }
+  records[today] = done;
+
+  renderToday(); renderStats(); renderChart();
+  saveCache();
+
+  if (sb && currentSession) {
+    const { error } = await sb.from("records").upsert(
+      { user_id: currentSession.user.id, date: today, done },
+      { onConflict: "user_id,date" }
+    );
+    if (error) console.warn("Не удалось сохранить отметку:", error.message);
+  }
+}
+
+/* ---------- Рендер: сегодня ---------- */
 function renderToday() {
   const d = new Date();
   document.getElementById("todayDate").textContent = formatDateRu(d);
 
-  const rec = todayRecord();
   const max = maxPoints();
   const earned = scoreFor(dateKey());
-  const doneCount = rec.done.length;
+  const done = records[dateKey()] || [];
+  const doneCount = done.length;
   const pct = max > 0 ? earned / max : 0;
 
   document.getElementById("todayPoints").textContent = earned;
   document.getElementById("todayMax").textContent = max;
-  document.getElementById("doneLine").textContent =
-    `${doneCount} из ${actions.length} действий`;
+  document.getElementById("doneLine").textContent = `${doneCount} из ${actions.length} действий`;
 
-  // кольцо прогресса
   const C = 326.73;
   const ring = document.getElementById("ringFg");
   ring.style.strokeDashoffset = String(C * (1 - pct));
   ring.style.stroke = pct >= 0.8 ? "var(--good)" : pct >= 0.5 ? "var(--mid)" : "var(--accent)";
   document.getElementById("ringPct").textContent = Math.round(pct * 100) + "%";
 
-  // оценка за день
   const grade = document.getElementById("gradeBadge");
   grade.className = "grade";
   if (doneCount === 0) {
     grade.textContent = "—";
   } else if (pct >= 0.8) {
-    grade.textContent = "A";
-    grade.classList.add("good");
+    grade.textContent = "A"; grade.classList.add("good");
   } else if (pct >= 0.6) {
-    grade.textContent = "B";
-    grade.classList.add("good");
+    grade.textContent = "B"; grade.classList.add("good");
   } else if (pct >= 0.4) {
-    grade.textContent = "C";
-    grade.classList.add("mid");
+    grade.textContent = "C"; grade.classList.add("mid");
   } else {
-    grade.textContent = "D";
-    grade.classList.add("bad");
+    grade.textContent = "D"; grade.classList.add("bad");
   }
 
   document.getElementById("streakBadge").textContent = computeStreak();
-}
-
-function computeStreak() {
-  let streak = 0;
-  const d = new Date();
-  // если сегодня ещё ничего не отмечено — считаем серию со вчерашнего дня
-  if (scoreFor(dateKey(d)) === 0) {
-    d.setDate(d.getDate() - 1);
-  }
-  let guard = 0;
-  while (guard++ < 5000) {
-    const k = dateKey(d);
-    if (scoreFor(k) > 0) {
-      streak++;
-      d.setDate(d.getDate() - 1);
-    } else {
-      break;
-    }
-  }
-  return streak;
 }
 
 function renderStats() {
@@ -193,26 +334,18 @@ function renderStats() {
   ];
 
   document.getElementById("statsGrid").innerHTML = cards
-    .map(
-      (c) => `
+    .map((c) => `
       <div class="stat-card">
         <span class="stat-label">${c.label}</span>
         <span class="stat-value">${c.value}</span>
         <span class="stat-sub">${c.sub}</span>
-      </div>`
-    )
+      </div>`)
     .join("");
-}
-
-function fmtKeyRu(key) {
-  const [y, m, d] = key.split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 }
 
 /* ---------- Рендер: чек-лист ---------- */
 function renderChecklist() {
-  const rec = todayRecord();
-  const doneSet = new Set(rec.done);
+  const doneSet = new Set(records[dateKey()] || []);
   const wrap = document.getElementById("checklist");
 
   if (actions.length === 0) {
@@ -223,10 +356,9 @@ function renderChecklist() {
   wrap.innerHTML = CATEGORIES.map((cat) => {
     const items = actions.filter((a) => a.category === cat.id);
     if (items.length === 0) return "";
-    const rows = items
-      .map((a) => {
-        const checked = doneSet.has(a.id);
-        return `
+    const rows = items.map((a) => {
+      const checked = doneSet.has(a.id);
+      return `
         <label class="item ${checked ? "done" : ""}" data-id="${a.id}">
           <input type="checkbox" ${checked ? "checked" : ""} data-id="${a.id}" />
           <span class="checkbox"></span>
@@ -234,8 +366,7 @@ function renderChecklist() {
           <span class="title">${escapeHtml(a.title)}</span>
           <span class="weight">+${a.weight}</span>
         </label>`;
-      })
-      .join("");
+    }).join("");
     return `
       <div class="cat-group">
         <div class="cat-head">
@@ -245,14 +376,6 @@ function renderChecklist() {
         ${rows}
       </div>`;
   }).join("");
-}
-
-function escapeHtml(s) {
-  return String(s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }
 
 /* ---------- Рендер: график ---------- */
@@ -267,41 +390,38 @@ function renderChart() {
     days.push({ key: dateKey(d), date: d });
   }
 
-  wrap.innerHTML = days
-    .map(({ key, date }) => {
-      const sc = scoreFor(key);
-      const pct = Math.min(1, sc / max);
-      const height = Math.round(pct * 150);
-      const isToday = key === dateKey();
-      const color = pct >= 0.8 ? "var(--good)" : pct >= 0.5 ? "var(--mid)" : "var(--accent)";
-      const label = date.toLocaleDateString("ru-RU", { weekday: "short" }).replace(".", "");
-      const full = formatDateRu(date);
-      return `
-        <div class="bar-col ${isToday ? "today" : ""}" title="${full}: ${sc} из ${max} баллов">
-          <div class="bar-track">
-            <div class="bar" style="height:${height}px; background:${color}"></div>
-          </div>
-          <span class="bar-label">${label}</span>
-        </div>`;
-    })
-    .join("");
+  wrap.innerHTML = days.map(({ key, date }) => {
+    const sc = scoreFor(key);
+    const pct = Math.min(1, sc / max);
+    const height = Math.round(pct * 150);
+    const isToday = key === dateKey();
+    const color = pct >= 0.8 ? "var(--good)" : pct >= 0.5 ? "var(--mid)" : "var(--accent)";
+    const label = date.toLocaleDateString("ru-RU", { weekday: "short" }).replace(".", "");
+    const full = formatDateRu(date);
+    return `
+      <div class="bar-col ${isToday ? "today" : ""}" title="${full}: ${sc} из ${max} баллов">
+        <div class="bar-track">
+          <div class="bar" style="height:${height}px; background:${color}"></div>
+        </div>
+        <span class="bar-label">${label}</span>
+      </div>`;
+  }).join("");
 
   axis.innerHTML = `
     <span>${fmtKeyRu(days[0].key)}</span>
     <span>${fmtKeyRu(days[days.length - 1].key)}</span>`;
 }
 
-/* ---------- Рендер: список действий (управление) ---------- */
+/* ---------- Рендер: список действий ---------- */
 function renderActionsList() {
   const wrap = document.getElementById("actionsList");
   if (actions.length === 0) {
     wrap.innerHTML = `<div class="empty">Список пуст.</div>`;
     return;
   }
-  wrap.innerHTML = actions
-    .map((a) => {
-      const cat = catMeta(a.category);
-      return `
+  wrap.innerHTML = actions.map((a) => {
+    const cat = catMeta(a.category);
+    return `
       <div class="action-row" data-id="${a.id}">
         <span class="icon">${a.icon || "✅"}</span>
         <span class="title">${escapeHtml(a.title)}</span>
@@ -310,27 +430,7 @@ function renderActionsList() {
         <button class="row-btn edit" data-id="${a.id}" title="Редактировать">✎</button>
         <button class="row-btn del" data-id="${a.id}" title="Удалить">🗑</button>
       </div>`;
-    })
-    .join("");
-}
-
-/* ---------- События чек-листа ---------- */
-function onChecklistChange(e) {
-  const input = e.target.closest("input[type=checkbox][data-id]");
-  if (!input) return;
-  const id = input.dataset.id;
-  const rec = todayRecord();
-  if (input.checked) {
-    if (!rec.done.includes(id)) rec.done.push(id);
-  } else {
-    rec.done = rec.done.filter((x) => x !== id);
-  }
-  save();
-  renderToday();
-  renderStats();
-  renderChart();
-  // обновляем только визуальное состояние текущей строки
-  input.closest(".item").classList.toggle("done", input.checked);
+  }).join("");
 }
 
 /* ---------- Модальное окно ---------- */
@@ -343,9 +443,7 @@ function fillCategorySelect(selected) {
 
 function openModal(action) {
   editingId = action ? action.id : null;
-  document.getElementById("modalTitle").textContent = action
-    ? "Редактировать действие"
-    : "Добавить действие";
+  document.getElementById("modalTitle").textContent = action ? "Редактировать действие" : "Добавить действие";
   document.getElementById("fTitle").value = action ? action.title : "";
   document.getElementById("fWeight").value = action ? action.weight : 10;
   document.getElementById("fIcon").value = action ? (action.icon || "") : "";
@@ -359,7 +457,7 @@ function closeModal() {
   editingId = null;
 }
 
-function onFormSubmit(e) {
+async function onFormSubmit(e) {
   e.preventDefault();
   const title = document.getElementById("fTitle").value.trim();
   const weight = parseInt(document.getElementById("fWeight").value, 10);
@@ -367,52 +465,87 @@ function onFormSubmit(e) {
   const icon = document.getElementById("fIcon").value.trim() || "✅";
 
   if (!title) return;
+  showLoading(true);
 
   if (editingId) {
+    const { error } = await sb.from("actions").update({ title, weight, category, icon }).eq("id", editingId);
+    if (error) {
+      alert("Не удалось сохранить: " + error.message);
+      showLoading(false);
+      return;
+    }
     const a = actions.find((x) => x.id === editingId);
     if (a) Object.assign(a, { title, weight, category, icon });
   } else {
-    actions.push({ id: uid(), title, weight, category, icon });
+    const { data, error } = await sb.from("actions")
+      .insert({ user_id: currentSession.user.id, title, weight, category, icon, pos: actions.length })
+      .select().single();
+    if (error) {
+      alert("Не удалось добавить: " + error.message);
+      showLoading(false);
+      return;
+    }
+    actions.push(data);
   }
 
-  save();
+  saveCache();
+  showLoading(false);
   closeModal();
   renderAll();
 }
 
-/* ---------- Управление действиями ---------- */
-function onActionsListClick(e) {
-  const editBtn = e.target.closest(".edit[data-id]");
-  const delBtn = e.target.closest(".del[data-id]");
-  if (editBtn) {
-    const a = actions.find((x) => x.id === editBtn.dataset.id);
-    if (a) openModal(a);
-  } else if (delBtn) {
-    const a = actions.find((x) => x.id === delBtn.dataset.id);
-    if (a && confirm(`Удалить действие «${a.title}»?`)) {
-      actions = actions.filter((x) => x.id !== a.id);
-      // убрать из всех записей дня
-      Object.values(records).forEach((r) => {
-        if (r.done) r.done = r.done.filter((id) => id !== a.id);
-      });
-      save();
-      renderAll();
-    }
-  }
-}
+async function deleteAction(id) {
+  const a = actions.find((x) => x.id === id);
+  if (!a) return;
+  if (!confirm(`Удалить действие «${a.title}»?`)) return;
 
-function restoreDefaults() {
-  if (!confirm("Заменить текущий список действий на набор по умолчанию? Ваши отметки за прошлые дни сохранятся.")) return;
-  actions = defaultActions();
-  save();
+  showLoading(true);
+  const { error } = await sb.from("actions").delete().eq("id", id);
+  if (error) {
+    alert("Не удалось удалить: " + error.message);
+    showLoading(false);
+    return;
+  }
+  actions = actions.filter((x) => x.id !== id);
+  saveCache();
+  showLoading(false);
   renderAll();
 }
 
-/* ---------- Данные: экспорт / импорт / очистка ---------- */
+async function restoreDefaults() {
+  if (!confirm("Заменить текущий список действий на набор по умолчанию? Отметки сохранятся.")) return;
+  showLoading(true);
+  try {
+    await sb.from("actions").delete().eq("user_id", currentSession.user.id);
+    const seeded = defaultActions().map((d, i) => ({ ...d, pos: i, user_id: currentSession.user.id }));
+    const ins = await sb.from("actions").insert(seeded).select();
+    if (ins.error) throw ins.error;
+    actions = ins.data;
+    saveCache();
+  } catch (err) {
+    alert("Не удалось восстановить: " + (err && err.message ? err.message : err));
+  }
+  showLoading(false);
+  renderAll();
+}
+
+async function resetToday() {
+  const today = dateKey();
+  if (!(records[today] && records[today].length)) return;
+  if (!confirm("Сбросить все отметки за сегодня?")) return;
+
+  records[today] = [];
+  renderToday(); renderStats(); renderChart();
+  saveCache();
+  await sb.from("records").upsert(
+    { user_id: currentSession.user.id, date: today, done: [] },
+    { onConflict: "user_id,date" }
+  );
+}
+
+/* ---------- Экспорт / импорт / очистка ---------- */
 function exportData() {
-  const blob = new Blob([JSON.stringify({ actions, records }, null, 2)], {
-    type: "application/json",
-  });
+  const blob = new Blob([JSON.stringify({ actions, records }, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -423,46 +556,74 @@ function exportData() {
 
 function importData(file) {
   const reader = new FileReader();
-  reader.onload = () => {
+  reader.onload = async () => {
+    let data;
     try {
-      const data = JSON.parse(reader.result);
-      if (!Array.isArray(data.actions) || typeof data.records !== "object") {
-        throw new Error("bad format");
-      }
-      if (!confirm("Импорт заменит текущие действия и записи. Продолжить?")) return;
-      actions = data.actions;
-      records = data.records;
-      save();
-      renderAll();
+      data = JSON.parse(reader.result);
+      if (!Array.isArray(data.actions) || typeof data.records !== "object") throw new Error("bad format");
     } catch (err) {
       alert("Не удалось прочитать файл: неверный формат.");
+      return;
     }
+    if (!confirm("Импорт заменит текущие действия и записи в облаке. Продолжить?")) return;
+
+    showLoading(true);
+    try {
+      // 1) заменяем действия, сохраняя соответствие старых id новым
+      await sb.from("actions").delete().eq("user_id", currentSession.user.id);
+      const idMap = {};
+      const newActions = [];
+      for (let i = 0; i < data.actions.length; i++) {
+        const a = data.actions[i];
+        const { data: row, error } = await sb.from("actions")
+          .insert({ user_id: currentSession.user.id, title: a.title, weight: a.weight, category: a.category, icon: a.icon || "", pos: i })
+          .select().single();
+        if (error) throw error;
+        idMap[String(a.id)] = row.id;
+        newActions.push(row);
+      }
+      actions = newActions;
+
+      // 2) заменяем записи, пересчитывая id действий
+      await sb.from("records").delete().eq("user_id", currentSession.user.id);
+      records = {};
+      const recs = [];
+      Object.keys(data.records).forEach((date) => {
+        const done = (Array.isArray(data.records[date]) ? data.records[date] : [])
+          .map((id) => idMap[String(id)])
+          .filter(Boolean);
+        records[date] = done;
+        recs.push({ user_id: currentSession.user.id, date, done });
+      });
+      if (recs.length) {
+        const insR = await sb.from("records").insert(recs);
+        if (insR.error) throw insR.error;
+      }
+
+      saveCache();
+    } catch (err) {
+      alert("Не удалось импортировать: " + (err && err.message ? err.message : err));
+    }
+    showLoading(false);
+    renderAll();
   };
   reader.readAsText(file);
 }
 
-function wipeData() {
+async function wipeData() {
   if (!confirm("Удалить ВСЕ данные (действия и всю историю)? Это действие необратимо.")) return;
-  localStorage.removeItem(LS_ACTIONS);
-  localStorage.removeItem(LS_RECORDS);
-  actions = defaultActions();
-  records = {};
-  save();
-  renderAll();
-}
-
-/* ---------- Тема ---------- */
-function applyTheme() {
-  const saved = localStorage.getItem(LS_THEME) || "light";
-  document.documentElement.setAttribute("data-theme", saved);
-  document.getElementById("themeToggle").textContent = saved === "dark" ? "☀️" : "🌙";
-}
-
-function toggleTheme() {
-  const cur = document.documentElement.getAttribute("data-theme");
-  const next = cur === "dark" ? "light" : "dark";
-  localStorage.setItem(LS_THEME, next);
-  applyTheme();
+  showLoading(true);
+  try {
+    await sb.from("actions").delete().eq("user_id", currentSession.user.id);
+    await sb.from("records").delete().eq("user_id", currentSession.user.id);
+    actions = [];
+    records = {};
+    saveCache();
+    await loadData(); // пересоздаст набор по умолчанию
+  } catch (err) {
+    alert("Не удалось очистить: " + (err && err.message ? err.message : err));
+    showLoading(false);
+  }
 }
 
 /* ---------- Главный рендер ---------- */
@@ -477,10 +638,31 @@ function renderAll() {
 /* ---------- Инициализация ---------- */
 document.addEventListener("DOMContentLoaded", () => {
   applyTheme();
-  renderAll();
+  initAuth();
 
-  document.getElementById("checklist").addEventListener("change", onChecklistChange);
-  document.getElementById("actionsList").addEventListener("click", onActionsListClick);
+  document.getElementById("authForm").addEventListener("submit", onAuthFormSubmit);
+  document.getElementById("signOut").addEventListener("click", signOut);
+  document.getElementById("themeToggle").addEventListener("click", toggleTheme);
+
+  document.getElementById("checklist").addEventListener("change", (e) => {
+    const input = e.target.closest("input[type=checkbox][data-id]");
+    if (!input) return;
+    const id = input.dataset.id;
+    input.closest(".item").classList.toggle("done", input.checked);
+    toggleAction(id, input.checked);
+  });
+
+  document.getElementById("actionsList").addEventListener("click", (e) => {
+    const editBtn = e.target.closest(".edit[data-id]");
+    const delBtn = e.target.closest(".del[data-id]");
+    if (editBtn) {
+      const a = actions.find((x) => x.id === editBtn.dataset.id);
+      if (a) openModal(a);
+    } else if (delBtn) {
+      deleteAction(delBtn.dataset.id);
+    }
+  });
+
   document.getElementById("actionForm").addEventListener("submit", onFormSubmit);
   document.getElementById("modalCancel").addEventListener("click", closeModal);
   document.getElementById("modalBackdrop").addEventListener("click", (e) => {
@@ -489,17 +671,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("addAction").addEventListener("click", () => openModal(null));
   document.getElementById("restoreDefaults").addEventListener("click", restoreDefaults);
-  document.getElementById("resetToday").addEventListener("click", () => {
-    const rec = todayRecord();
-    if (rec.done.length === 0) return;
-    if (confirm("Сбросить все отметки за сегодня?")) {
-      rec.done = [];
-      save();
-      renderAll();
-    }
-  });
-
-  document.getElementById("themeToggle").addEventListener("click", toggleTheme);
+  document.getElementById("resetToday").addEventListener("click", resetToday);
 
   document.getElementById("rangeToggle").addEventListener("click", (e) => {
     const btn = e.target.closest("button[data-range]");
@@ -511,9 +683,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   document.getElementById("exportData").addEventListener("click", exportData);
-  document.getElementById("importData").addEventListener("click", () => {
-    document.getElementById("importFile").click();
-  });
+  document.getElementById("importData").addEventListener("click", () => document.getElementById("importFile").click());
   document.getElementById("importFile").addEventListener("change", (e) => {
     if (e.target.files[0]) importData(e.target.files[0]);
     e.target.value = "";
